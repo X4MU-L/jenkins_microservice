@@ -1,0 +1,32 @@
+POST http://localhost:3000/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@yeoiiamuuuii90oole8.com",
+    "password": "passwOUord&87%",
+    "name": "test",
+    "roles": ["user", "adin"]
+}
+###
+
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@yeoiiamuuuiipoole8.com",
+  "password": "passwOUord&87%"
+}
+
+###
+
+GET http://localhost:3000/user/profile
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAeWVvaWlhbXV1dWlpcG9vbGU4LmNvbSIsImlkIjoiNjdkODcxZjZlYTZmYzU3ODFkMTAyNTNiIiwicm9sZXMiOlsidXNlciIsImFkbWluIl0sImlhdCI6MTc0MjIzODI1MSwiZXhwIjoxNzQyMjQxODUxfQ.NcUreMNHQSqB1_xm3bQToZFe-KVhE6sSAU2XeEF0OJo
+
+###
+
+GET http://localhost:3000/user/67d83068dcc8073ca804ecb7
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAeWVvaWlhbXV1dWlpcG9vbGU4LmNvbSIsImlkIjoiNjdkODcxZjZlYTZmYzU3ODFkMTAyNTNiIiwicm9sZXMiOlsidXNlciIsImFkbWluIl0sImlhdCI6MTc0MjIzODI1MSwiZXhwIjoxNzQyMjQxODUxfQ.NcUreMNHQSqB1_xm3bQToZFe-KVhE6sSAU2XeEF0OJo
+
+

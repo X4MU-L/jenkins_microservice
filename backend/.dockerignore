@@ -1,0 +1,5 @@
+logs         # Log files that shouldn't be in your image
+dist         # Compiled output (will be rebuilt in container)
+node_modules # Dependencies (will be reinstalled in container)
+build        # Build artifacts
+coverage     # Test coverage reports
