@@ -1,0 +1,19 @@
+.terraform
+.ansible
+.vscode
+*.tfstate
+*.tfstate.backup
+*.tfstate.backup.*
+*.tfstate.backup
+myplan
+*.pem
+
+# dotenv environment variable files
+.env
+.env
+.env.*
+!.env.example
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
