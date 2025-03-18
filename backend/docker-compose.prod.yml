@@ -1,0 +1,46 @@
+services:
+  nest-api:
+    container_name: nest-api-prod
+    build:
+      context: .
+      target: production # Build for production
+    ports:
+      - '${PORT:-3000}:${PORT:-3000}'
+    env_file:
+      - .env.production
+    depends_on:
+      - mongodb
+    environment:
+      - NODE_ENV=production
+    networks:
+      - nest-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  mongodb:
+    container_name: mongodb-prod
+    image: mongo:latest
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    networks:
+      - nest-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  nest-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

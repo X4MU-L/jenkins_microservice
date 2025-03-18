@@ -1,0 +1,62 @@
+services:
+  nest-api:
+    container_name: nest-api
+    build:
+      context: .
+      target: dev # Build for development
+    volumes:
+      - .:/app
+      - /app/node_modules # Use container's node_modules
+    ports:
+      - '${PORT:-3000}:${PORT:-3000}'
+    env_file:
+      - .env.development
+    depends_on:
+      - mongodb
+    environment:
+      - NODE_ENV=development
+    networks:
+      - nest-network
+    restart: unless-stopped
+    command: npm run start:dev
+
+  mongodb:
+    container_name: mongodb
+    image: mongo:latest
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb_data:/data/db
+    env_file:
+      - .env.development
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME:-root}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-password}
+    networks:
+      - nest-network
+    restart: unless-stopped
+
+  mongo-express:
+    container_name: mongo-express
+    image: mongo-express:latest
+    ports:
+      - '8082:8081'
+    env_file:
+      - .env.development
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME:-root}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD:-password}
+      - ME_CONFIG_MONGODB_URL=mongodb://${MONGO_INITDB_ROOT_USERNAME:-root}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongodb:27017/
+      - PORT=8081
+    depends_on:
+      - mongodb
+    networks:
+      - nest-network
+    restart: unless-stopped
+
+networks:
+  nest-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
