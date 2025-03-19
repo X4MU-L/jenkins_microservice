@@ -1,0 +1,101 @@
+---
+# Jenkins Configuration Variables
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+jenkins:
+  version: "2.401.1"  # Specify Jenkins version
+  admin_user: "admin"
+  admin_password: "{{ vault_jenkins_admin_password | default('admin') }}"  # Use Ansible Vault for production
+  service_name: "jenkins"
+  namespace: "jenkins"
+  context_path: "/jenkins"
+  http_port: 8080
+  agent_port: 50000
+  home_dir: "/var/jenkins_home"
+  plugins:
+    - name: "kubernetes"
+    - name: "workflow-aggregator"  # Pipeline
+    - name: "git"
+    - name: "configuration-as-code"
+    - name: "blueocean"
+    - name: "aws-credentials"
+    - name: "terraform"
+    - name: "ansible"
+
+# Docker Configuration
+docker:
+  registry: "docker.io"
+  jenkins_image: "jenkins/jenkins"
+  jenkins_agent_image: "jenkins/inbound-agent"
+  images_pull_policy: "IfNotPresent"
+  network_name: "jenkins-network"
+  storage_driver: "overlay2"
+
+# Kubernetes Settings
+kubernetes:
+  service_type: "NodePort"  # Options: ClusterIP, NodePort, LoadBalancer
+  resource_limits:
+    cpu: "1"
+    memory: "2Gi"
+  resource_requests:
+    cpu: "500m"
+    memory: "1Gi"
+  persistence:
+    enabled: true
+    storage_class: "gp2"  # AWS EBS storage class
+    size: "10Gi"
+  security_context:
+    run_as_user: 1000
+    fs_group: 1000
+  node_selector:
+    role: "ci"
+  service_account:
+    create: true
+    name: "jenkins"
+  rbac:
+    create: true
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  hosts:
+    - host: "jenkins.example.com"
+      paths:
+        - path: "/"
+  tls: []  # Configure TLS in production
+
+# AWS Specific Settings
+aws:
+  region: "us-east-1"
+  elb_scheme: "internet-facing"
+  route53:
+    create_record: false
+    hosted_zone: "example.com"
+    record_name: "jenkins"
+
+# Deployment default values
+deployment:
+  update_strategy: "RollingUpdate"
+  replicas: 1
+  revision_history_limit: 10
+  termination_grace_period_seconds: 30
+  wait_for_ready: true
+  timeout: 300  # seconds
+  backoff_limit: 6
+
+# Health check settings
+health_check:
+  liveness_probe:
+    initial_delay_seconds: 120
+    timeout_seconds: 5
+    period_seconds: 10
+    failure_threshold: 3
+  readiness_probe:
+    initial_delay_seconds: 60
+    timeout_seconds: 5
+    period_seconds: 10
+    failure_threshold: 3
+

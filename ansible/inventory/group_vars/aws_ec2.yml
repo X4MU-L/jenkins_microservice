@@ -1,0 +1,19 @@
+
+
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+user: "{{ ansible_user }}"
+proj_app: chat_app
+proj_name: "{{ proj_app }}"
+
+proj_path: "{{ ansible_env.HOME }}/chat/{{ proj_name }}"
+domains:
+ - "{{ ansible_host }}.nip.io"
+ - "{{ ansible_host }}"
+ - "{{ ansible_dns_name }}"
+ - "www.{{ ansible_host }}.nip.io"
+
+ # Variables below don't appear in Mezzanine's fabfile.py
+ # but I've added them for convenience
+conf_path: /etc/nginx/conf
+tls_enabled: true
+
