@@ -453,7 +453,7 @@
 
 - name: Create user creation groovy template
   ansible.builtin.template:
-    src: create_user.groovy.j2
+    src: user-creation.groovy.j2
     dest: /tmp/create_user.groovy
     mode: "0644"
   vars:
