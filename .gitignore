@@ -1,6 +1,5 @@
 .terraform
 .ansible
-.vscode
 *.tfstate
 *.tfstate.backup
 *.tfstate.backup.*
