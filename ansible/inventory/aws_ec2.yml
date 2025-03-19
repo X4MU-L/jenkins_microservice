@@ -1,0 +1,78 @@
+---
+# AWS EC2 dynamic inventory configuration
+
+# plugin: aws_ec2
+# # Use the boto profile name here, or use AWS credentials through environment variables
+# # aws_profile: default
+# regions:
+#   - us-east-1  # Update with your AWS region(s)
+#   - us-west-2
+
+# # Filters - only include running instances
+# filters:
+#   instance-state-name: running
+
+# # Group instances by tags
+groups:
+  jenkins: "'Jenkins' in tags.Server"
+  servers: "'Services' in tags.Server"
+#   web: "'web' in tags"
+#   database: "'database' in tags"
+#   dev: "'dev' in tags.Environment"
+#   prod: "'prod' in tags.Environment"
+
+# # Configure hostname preferences  
+# hostnames:
+#   - public-ip-address
+#   - private-ip-address
+#   - tag:Name
+#   - dns-name
+
+# # Set keyed_groups for better organization
+# keyed_groups:
+#   # Create groups based on instance type
+#   - key: instance_type
+#     prefix: type
+#   # Create groups based on region
+#   - key: placement.region
+#     prefix: aws_region
+#   # Create groups based on availability zone
+#   - key: placement.availability_zone
+#     prefix: az
+#   # Create groups based on state
+#   - key: instance_state
+#     prefix: instance_state
+#   # Create groups for each tag key
+#   - key: tags
+#     prefix: tag
+#   # Create groups for AMI
+#   - key: image_id
+#     prefix: ami
+#   # Create VPC groups
+#   - key: vpc_id
+#     prefix: vpc
+
+# compose:
+#   # Use public IP as ansible_host
+#   ansible_host: public_ip_address
+
+# # Cache inventory for faster execution (optional)
+# cache: yes
+# cache_plugin: jsonfile
+# cache_timeout: 3600
+# cache_connection: /tmp/aws_inventory_cache
+# cache_prefix: aws_ec2
+
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+host_key: public_ip_address
+filters:
+  instance-state-name: running
+
+keyed_groups:
+  - key: tags.Name
+    prefix: "aws"
+compose:
+  ansible_host: public_ip_address
+  ansible_dns_name: public_dns_name
