@@ -38,24 +38,24 @@ resource "aws_security_group" "jenkins" {
   tags   = merge(var.tags, { Name = "jenkins-sg" })
 
   ingress {
-    from_port   = 30080
-    to_port     = 30080
+    from_port   = var.jenkins_node_port
+    to_port     = var.jenkins_node_port
     protocol    = "tcp"
     cidr_blocks = var.ingress_cidr_blocks
     description = "Jenkins NodePort UI"
   }
 
   ingress {
-    from_port   = 8080
-    to_port     = 8080
+    from_port   = var.jenkins_container_port
+    to_port     = var.jenkins_container_port
     protocol    = "tcp"
     cidr_blocks = var.ingress_cidr_blocks
     description = "Jenkins Web UI"
   }
 
   ingress {
-    from_port   = 50000
-    to_port     = 50001
+    from_port   = var.jenkins_agent_node_port
+    to_port     = var.jenkins_agent_node_port
     protocol    = "tcp"
     cidr_blocks = var.ingress_cidr_blocks
     description = "Jenkins JNLP"
@@ -84,7 +84,7 @@ resource "aws_key_pair" "main" {
 
 resource "local_file" "private_key" {
   content              = tls_private_key.main.private_key_pem
-  filename             = "${path.cwd}/${var.app_name}-key.pem"
+  filename             = pathexpand("~/.ssh/${var.app_name}-key.pem")
   file_permission      = "0400"
   directory_permission = "0700"
 }

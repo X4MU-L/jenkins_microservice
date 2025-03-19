@@ -25,5 +25,19 @@ variable "name" {
 
 variable "app_name" {
   description = "The name of the application"
-  type = string
+  type        = string
+}
+
+variable "jenkins_node_port" {
+  description = "The port for Jenkins NodePort to Kubernetes"
+  type        = number
+}
+variable "jenkins_container_port" {
+  description = "The port for Jenkins container in Kubernetes"
+  type        = number
+}
+
+variable "jenkins_agent_node_port" {
+  description = "The nodeport for Jenkins agent JPNL"
+  type        = number
 }
