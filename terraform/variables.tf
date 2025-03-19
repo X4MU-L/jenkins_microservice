@@ -45,19 +45,54 @@ variable "deployment_type" {
     error_message = "Allowed values are: eks and ec2"
   }
 }
-
-variable "jenkins_port" {
-  description = "Port for Jenkins web interface"
-  type        = number
-  default     = 8080
-}
-
-variable "jenkins_agent_port" {
-  description = "Port for Jenkins JNLP agents"
-  type        = number
-  default     = 50000
-}
 variable "apps" {
   description = "The application tags"
   type        = tuple([string, string])
+}
+variable "CONTAINER_PORT" {
+  description = "Port for container interface"
+  type        = number
+}
+variable "NODE_PORT" {
+  description = "Port for Jenkins Nodeport to kubernetes"
+  type        = number
+}
+variable "AGENT_PORT" {
+  description = "Port for Jenkins JNLP agents"
+  type        = number
+}
+variable "AGENT_NODE_PORT" {
+  description = "NodePort for Jenkins JNLP agents"
+  type        = number
+}
+variable "SECRET_NAME_VOLUME_KEY" {
+  description = "The secret name for the volume key in kubernetes"
+  type        = string
+
+}
+variable "APP_NAME" {
+  description = "The application name"
+  type        = string
+}
+
+variable "APP_VERSION" {
+  description = "The application version"
+  type        = string
+}
+
+variable "APP_DESCRIPTION" {
+  description = "The application description"
+  type        = string
+}
+
+variable "APP_AUTHOR" {
+  description = "The application author"
+  type        = string
+
+}
+
+variable "GITHUB_USERNAME" {
+  description = "The github username"
+  type        = string
+
 }

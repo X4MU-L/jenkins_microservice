@@ -18,13 +18,16 @@ module "subnet" {
 }
 
 module "security" {
-  source              = "./modules/security"
-  name                = "MySecurityGroup"
-  vpc_id              = module.network.vpc_id
-  egress_cidr_blocks  = var.egress_cidr_blocks
-  ingress_cidr_blocks = var.ingress_cidr_blocks
-  app_name            = "ansible-with-tags"
-  tags                = var.tags
+  source                  = "./modules/security"
+  name                    = "MySecurityGroup"
+  vpc_id                  = module.network.vpc_id
+  egress_cidr_blocks      = var.egress_cidr_blocks
+  ingress_cidr_blocks     = var.ingress_cidr_blocks
+  app_name                = "ansible-with-tags"
+  tags                    = var.tags
+  jenkins_node_port       = var.NODE_PORT
+  jenkins_container_port  = var.CONTAINER_PORT
+  jenkins_agent_node_port = var.AGENT_NODE_PORT
 }
 
 module "compute" {
@@ -39,7 +42,7 @@ module "compute" {
   assign_ip       = true
   volume_size     = 30
   volume_type     = "gp3"
-  jenkins_port    = var.jenkins_port
+  jenkins_port    = var.NODE_PORT
 
   #   # EC2-specific variables (only used when deployment_type = "ec2")
   # instance_type     = "t3.small"
