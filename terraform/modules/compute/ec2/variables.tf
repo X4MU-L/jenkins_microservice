@@ -48,5 +48,5 @@ variable "jenkins_port" {
 }
 variable "apps" {
   description = "tags for the instances"
-  type    = tuple([string, string])
+  type        = tuple([string, string])
 }
