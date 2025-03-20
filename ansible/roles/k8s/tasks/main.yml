@@ -1,0 +1,165 @@
+---
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - python3-pip
+      - docker.io
+    state: present
+    update_cache: true
+  become: true
+  tags:
+    - kubernetes
+
+- name: Install Python kubernetes module
+  ansible.builtin.apt:
+    name:
+      - python3-kubernetes
+    state: present
+  become: true
+  tags:
+    - kubernetes
+
+- name: Check if kubectl checksum file exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubectl.sha256
+  register: kubectl_checksum_file
+  tags:
+    - kubernetes
+
+
+- name: Download kubectl checksum file
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ lookup('url', 'https://dl.k8s.io/release/stable.txt') }}/bin/linux/amd64/kubectl.sha256"
+    dest: /usr/local/bin/kubectl.sha256
+    mode: "0644"
+  become: true
+  when: not kubectl_checksum_file.stat.exists
+  tags:
+    - kubernetes
+
+- name: Download latest kubectl binary
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ lookup('url', 'https://dl.k8s.io/release/stable.txt') }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+  become: true
+  tags:
+    - kubernetes
+
+- name: Validate kubectl checksum
+  ansible.builtin.shell: |
+    bash -o pipefail -c 'echo "$(cat /usr/local/bin/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum --check'
+  register: checksum_result
+  failed_when: "'OK' not in checksum_result.stdout"
+  changed_when: false
+  tags:
+    - kubernetes
+
+- name: Install kubectl to /usr/local/bin
+  ansible.builtin.command: sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+  args:
+    creates: /usr/local/bin/kubectl
+  tags:
+    - kubernetes
+
+- name: Verify kubectl installation
+  ansible.builtin.command: kubectl version --client --output=yaml
+  register: kubectl_version
+  changed_when: false
+  tags:
+    - kubernetes
+
+- name: Print kubectl version
+  ansible.builtin.debug:
+    var: kubectl_version.stdout
+  tags:
+    - kubernetes
+
+- name: Add ubuntu user to docker group
+  ansible.builtin.user:
+    name: ubuntu
+    groups: docker
+    append: true
+  become: true
+  tags:
+    - kubernetes
+
+- name: Wait for group membership to apply
+  ansible.builtin.pause:
+    seconds: 5
+  tags:
+    - kubernetes
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/get_k3s.sh
+    mode: "0755"
+  become: true
+  tags:
+    - kubernetes
+
+- name: Install k3s
+  ansible.builtin.command: /tmp/get_k3s.sh
+  args:
+    creates: /usr/local/bin/k3s
+  become: true
+  tags:
+    - kubernetes
+
+- name: Wait for k3s to be ready
+  ansible.builtin.wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    state: present
+    delay: 5
+    timeout: 300
+  become: true
+  tags:
+    - kubernetes
+
+- name: Create .kube directory for root
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0755"
+  become: true
+  tags:
+    - kubernetes
+
+- name: Copy k3s config for root
+  ansible.builtin.copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /root/.kube/config
+    remote_src: true
+    mode: "0600"
+  become: true
+  tags:
+    - kubernetes
+
+- name: Create .kube directory for ubuntu user
+  ansible.builtin.file:
+    path: /home/ubuntu/.kube
+    state: directory
+    mode: "0755"
+    owner: ubuntu
+    group: ubuntu
+  become: true
+  tags:
+    - kubernetes
+
+- name: Copy k3s config for ubuntu user
+  ansible.builtin.copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /home/ubuntu/.kube/config
+    remote_src: true
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  become: true
+  tags:
+    - kubernetes
