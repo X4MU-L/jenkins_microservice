@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-plugins
+  namespace: {{ jenkins_namespace }}
+data:
+  plugins.txt: |
+    kubernetes:latest
+    workflow-aggregator:latest
+    git:latest
+    job-dsl:latest
+    credentials:latest
+    ssh-credentials:latest
+    configuration-as-code:latest
+    role-strategy:latest
+    sshd:latest
+    matrix-auth:latest

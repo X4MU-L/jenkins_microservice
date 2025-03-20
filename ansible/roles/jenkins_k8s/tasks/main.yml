@@ -1,0 +1,363 @@
+---
+- name: Get ansible directory path
+  ansible.builtin.command: pwd
+  register: ansible_dir
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+- name: Store the original user's home directory as a fact
+  ansible.builtin.set_fact:
+    user_home: "{{ ansible_env.HOME }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+
+- name: Get project root (parent of ansible/)
+  ansible.builtin.set_fact:
+    project_root: "{{ ansible_dir.stdout | dirname }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+
+- name: Read .env file and store to env_lines
+  ansible.builtin.command: bash -c 'set -o pipefail && cat "{{ project_root }}/.env" | grep -v "^#" | grep "="'
+  register: env_lines
+  delegate_to: localhost
+  become: false
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+
+- name: Initialize env_vars dictionary for storing .env values
+  ansible.builtin.set_fact:
+    env_vars: {}
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+
+- name: Process each line of .env file
+  ansible.builtin.set_fact:
+    env_vars: "{{ env_vars | combine({ item.split('=')[0]: item.split('=', 1)[1] | trim('\"') }) }}"
+  loop: "{{ env_lines.stdout_lines }}"
+  when: item | length > 0
+  no_log: true
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+
+- name: Get AWS Server SSH key
+  ansible.builtin.slurp:
+    src: "~/.ssh/{{ env_vars.APP_NAME }}-key.pem"
+  register: aws_server_ssh
+  delegate_to: localhost
+  become: false
+  tags:
+    - jenkins
+    - secrets
+
+- name: Read GitHub SSH private key
+  ansible.builtin.slurp:
+    src: "~/.ssh/{{ env_vars.GITHUB_SSH_KEY_NAME }}"
+  register: github_ssh
+  delegate_to: localhost
+  become: false
+  tags:
+    - jenkins
+    - secrets
+
+- name: Get generated public key jenkins public key
+  ansible.builtin.slurp:
+    src: "{{ ansible_env.HOME }}/.ssh/jenkins_rsa.pub"
+  register: jenkins_public_key
+  tags:
+    - jenkins
+    - secrets
+
+- name: Read known_hosts file
+  ansible.builtin.slurp:
+    src: "~/.ssh/known_hosts"
+  register: known_hosts
+  delegate_to: localhost
+  become: false
+  tags:
+    - jenkins
+    - secrets
+
+- name: Set GitHub SSH Private Key
+  ansible.builtin.set_fact:
+    github_ssh_private_key: "{{ github_ssh.content | b64decode }}"
+  tags:
+    - jenkins
+    - secrets
+
+- name: Create directory for Jenkins data
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}"
+    state: directory
+    mode: "0755"
+  become: true
+  tags:
+    - jenkins
+    - setup
+
+- name: Create directory for kubernetes manifests
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/kubernetes"
+    state: directory
+    mode: "0755"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - setup
+
+- name: Create jenkins Namespace
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ jenkins_namespace }}"
+    apply: true
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Create Kubernetes secret file on remote
+  ansible.builtin.template:
+    src: jenkins.secrets.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins-secret.yml"
+    mode: "0600"
+  vars:
+    secret_name_volume_key: "{{ env_vars.SECRET_NAME_VOLUME_KEY }}"
+    github_ssh_content: "{{ github_ssh.content }}"
+    aws_server_ssh_content: "{{ aws_server_ssh.content }}"
+    jenkins_ssh_public_key: "{{ jenkins_public_key.content }}"
+    known_hosts_content: "{{ known_hosts.content }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes deployment file on remote
+  ansible.builtin.template:
+    src: jenkins.deployment.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins.deployment.yml"
+    mode: "0600"
+  vars:
+    secret_name_volume_key: "{{ env_vars.SECRET_NAME_VOLUME_KEY }}"
+    node_port: "{{ env_vars.NODE_PORT }}"
+    container_port: "{{ env_vars.CONTAINER_PORT }}"
+    agent_port: "{{ env_vars.AGENT_PORT }}"
+    agent_node_port: "{{ env_vars.AGENT_NODE_PORT }}"
+    ssh_port: "{{ env_vars.JENKINS_SSH_PORT }}"
+    ssh_node_port: "{{ env_vars.SSH_NODE_PORT }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes serviceAccount file on remote
+  ansible.builtin.template:
+    src: jenkins.service-account.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins.service-account.yml"
+    mode: "0600"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes volume file on remote
+  ansible.builtin.template:
+    src: jenkins.volume.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins.volume.yml"
+    mode: "0600"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes configMap for plugins file on remote
+  ansible.builtin.template:
+    src: jenkins.plugins-configmap.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins.plugins-configmap.yml"
+    mode: "0600"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes configMap for jenkins init groovy script
+  ansible.builtin.template:
+    src: jenkins.init-script-configmap.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins.init-script-configmap.yml"
+    mode: "0600"
+  vars:
+  # jenkins_ssh_public_key: "{{ jenkins_public_key.content | b64decode }}"
+    github_ssh_username: "{{ env_vars.GITHUB_USERNAME }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes configMap for ssh config file
+  ansible.builtin.template:
+    src: ssh.config.yml.j2
+    dest: "{{ user_home }}/kubernetes/ssh.config.yml"
+    mode: "0600"
+  vars:
+    github_ssh_username: "{{ env_vars.GITHUB_USERNAME }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+# Check if Jenkins pod is running
+- name: Check if Jenkins pod is running
+  ansible.builtin.command: kubectl get pods -n {{ jenkins_namespace }} -l app=jenkins --no-headers
+  register: jenkins_pod_status
+  failed_when: false
+  changed_when: false
+
+- name: Set fact if Jenkins is running
+  ansible.builtin.set_fact:
+    jenkins_running: "{{ jenkins_pod_status.stdout != '' }}"
+# Apply Kubernetes Secrets
+- name: Apply Kubernetes Secrets
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins-secret.yml"
+    apply: true
+  register: secret_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Apply Kubernetes ServiceAccount
+- name: Apply Kubernetes ServiceAccount
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.service-account.yml"
+    apply: true
+  register: service_account_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Apply Kubernetes Volumes
+- name: Apply Kubernetes Volumes
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.volume.yml"
+    apply: true
+  register: volume_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Apply Kubernetes ConfigMap for Plugins
+- name: Apply Kubernetes ConfigMap Plugins
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.plugins-configmap.yml"
+    apply: true
+  register: plugins_configmap_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Apply Kubernetes ConfigMap for Groovy Init Scripts
+- name: Apply Kubernetes ConfigMap Groovy Init Scripts
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.init-script-configmap.yml"
+    apply: true
+  register: init_script_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Apply Kubernetes Deployment
+- name: Apply Kubernetes Deployment
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.deployment.yml"
+    apply: true
+  register: deployment_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Restart Deployment if needed
+- name: Restart Jenkins Deployment if necessary
+  ansible.builtin.command: kubectl rollout restart deployment jenkins -n {{ jenkins_namespace }}
+  when: >
+    jenkins_running | bool and
+    (secret_changed.changed or
+    service_account_changed.changed or
+    volume_changed.changed or
+    plugins_configmap_changed.changed or
+    init_script_changed.changed or
+    deployment_changed.changed)
+  changed_when: false
+  tags:
+    - jenkins
+    - kubernetes
+# Wait for Jenkins pod to be ready
+- name: Wait for Jenkins pod to be ready
+  ansible.builtin.command: kubectl wait --namespace={{ jenkins_namespace }} --for=condition=ready pod --selector=app=jenkins --timeout=300s
+  register: jenkins_ready
+  changed_when: false
+  tags:
+    - jenkins
+    - kubernetes
+
+# - name: Get Jenkins pod name
+#   ansible.builtin.command: kubectl get pod -n jenkins -l app=jenkins -o jsonpath='{.items[0].metadata.name}'
+#   register: jenkins_pod
+#   changed_when: false
+#   tags:
+#     - jenkins
+#     - kubernetes
+
+# - name: Get Jenkins initial admin password
+#   ansible.builtin.command: kubectl exec -n jenkins {{ jenkins_pod.stdout }} -- cat /var/jenkins_home/secrets/initialAdminPassword
+#   register: jenkins_password
+#   changed_when: false
+#   tags:
+#     - jenkins
+#     - kubernetes
+
+# - name: Print Jenkins initial admin password
+#   ansible.builtin.debug:
+#     msg: "Jenkins initial admin password is: {{ jenkins_password.stdout }}"
+#   tags:
+#     - jenkins
+#     - kubernetes
+
+# - name: Set Jenkins Admin Password
+#   ansible.builtin.set_fact:
+#     jenkins_initial_password: "{{ jenkins_password.stdout }}"
+#   tags:
+#     - jenkins
+#     - Kubernetes
+
+# - name: Print Jenkins initial admin password
+#   ansible.builtin.debug:
+#     msg: "Jenkins initial admin password is: {{ jenkins_initial_password }}"
+#   tags:
+#     - jenkins
+#     - kubernetes
+
+# [Add instructions for creating Jenkins CLI access script]
+- name: Create Jenkins CLI access script
+  ansible.builtin.template:
+    src: jenkin.access-script.sh.j2
+    dest: "{{ user_home }}/jenkins-cli.sh"
+    mode: '0755'
+  vars:
+    ssh_node_port: "{{ env_vars.SSH_NODE_PORT }}"
+    ssh_port: "{{ env_vars.JENKINS_SSH_PORT }}"

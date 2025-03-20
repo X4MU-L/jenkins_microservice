@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-ssh-config
+  namespace: {{ jenkins_namespace }}
+data:
+  config: |
+    Host *
+        StrictHostKeyChecking no
+        UserKnownHostsFile /dev/null
+
+    # Default github account: {{ github_ssh_username }}@github.com
+    Host github.com
+        HostName github.com
+        IdentityFile ~/.ssh/github-ssh-key
+        IdentitiesOnly yes
+
+    # Default aws account: {{ ansible_user }}@{{ ansible_dns_name }}
+    Host {{ ansible_dns_name }}
+        HostName {{ ansible_dns_name }}
+        IdentityFile ~/.ssh/aws-server-key.pem
+        IdentitiesOnly yes
+        User {{ ansible_user }}
+    
+    # Default aws account: {{ ansible_user }}@{{ ansible_host }}
+    Host {{ ansible_host }}
+        HostName {{ ansible_host }}
+        IdentityFile ~/.ssh/aws-server-key.pem
+        IdentitiesOnly yes
+        User {{ ansible_user }}

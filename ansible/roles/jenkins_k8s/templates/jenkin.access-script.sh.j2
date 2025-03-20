@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Script to access Jenkins CLI via SSH
+
+# Configuration variables
+NAMESPACE="{{ jenkins_namespace }}"
+SSH_PORT="{{ ssh_node_port }}"
+SSH_KEY="{{ user_home }}/.ssh/jenkins_rsa"
+JENKINS_USER="{{ jenkins_admin_username }}"
+
+# Start port-forward in the background
+kubectl port-forward -n $NAMESPACE svc/jenkins $SSH_PORT:{{ ssh_port }} &
+PF_PID=$!
+
+# Give port-forward time to establish
+sleep 3
+
+# Example CLI command - list all jobs
+ssh -p $SSH_PORT -i $SSH_KEY $JENKINS_USER@localhost who-am-i
+
+# Clean up port-forward when done
+kill $PF_PID

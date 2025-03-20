@@ -1,0 +1,197 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: {{ jenkins_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      serviceAccountName: jenkins
+      
+      initContainers:
+        - name: install-plugins
+          image: jenkins/jenkins:lts
+          command: ["/bin/sh", "-c"]
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+            - name: plugins-init
+              mountPath: /var/jenkins_plugins/plugins.txt
+              subPath: plugins.txt
+          args:
+            - |
+              echo "Installing Jenkins plugins..."
+              mkdir -p /var/jenkins_home/plugins
+
+              RETRY_COUNT=0
+              MAX_RETRIES=5
+
+              install_plugins() {
+                  echo "Installing $plugin..."
+                  # Explicitly set the plugin directory
+                  jenkins-plugin-cli --plugin-file /var/jenkins_plugins/plugins.txt \
+                   --plugin-download-directory=/var/jenkins_home/plugins || return 1
+              }
+
+              while ! install_plugins; do
+                RETRY_COUNT=$((RETRY_COUNT+1))
+                echo "Plugin installation failed. Retrying ($RETRY_COUNT/$MAX_RETRIES)..."
+                if [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ]; then
+                  echo "Max retries reached. Plugin installation failed."
+                  exit 1
+                fi
+                sleep 5
+              done
+
+              echo "Plugin installation completed successfully."
+        - name: setup-init-scripts
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+            - name: init-scripts
+              mountPath: /init-scripts-source
+            - name: ssh-key-volume
+              mountPath: /ssh-keys
+          args:
+            - |
+              echo "Preparing init scripts with proper SSH keys..."
+              mkdir -p /var/jenkins_home/init.groovy.d
+              mkdir -p /usr/share/jenkins/ref/init.groovy.d/
+              
+              # Copy all init scripts to target location
+              cp /init-scripts-source/* /var/jenkins_home/init.groovy.d/
+              cp /init-scripts-source/* /usr/share/jenkins/ref/init.groovy.d/
+              
+              # Get SSH keys from mounted secrets
+              GITHUB_SSH_KEY=$(cat /ssh-keys/github-ssh-key)
+              JENKINS_SSH_PUBLIC_KEY=$(cat /ssh-keys/jenkins-ssh-public-key.pub)
+              
+              # Now handle the multiline SSH keys properly
+              # We need to:
+              # 1. Replace the actual quote characters with escaped quotes in the key
+              # 2. Handle the multiline format with proper Groovy triple quotes
+              
+              # For GitHub SSH key (likely a private key with headers)
+              # Replace literal quotes with escaped quotes in the key
+              GITHUB_SSH_KEY_ESCAPED=$(echo "$GITHUB_SSH_KEY" | sed 's/"/\\"/g')
+              
+              # For Jenkins public key (likely has ----- BEGIN/END headers)
+              JENKINS_SSH_PUBLIC_KEY_ESCAPED=$(echo "$JENKINS_SSH_PUBLIC_KEY" | sed 's/"/\\"/g')
+              
+              # Use awk to properly handle multiline replacements
+              awk -v github_key="$GITHUB_SSH_KEY_ESCAPED" '
+              {
+                if ($0 ~ /def sshKey = "github_ssh_private_key"/) {
+                  print "def sshKey = \"\"\"" github_key "\"\"\""
+                } else {
+                  print $0
+                }
+              }' /var/jenkins_home/init.groovy.d/02-credentials.groovy > /tmp/02-credentials.groovy
+              mv /tmp/02-credentials.groovy /var/jenkins_home/init.groovy.d/02-credentials.groovy
+              
+              awk -v jenkins_key="$JENKINS_SSH_PUBLIC_KEY_ESCAPED" '
+              {
+                if ($0 ~ /def publicKey = "jenkins_ssh_public_key"/) {
+                  print "def publicKey = \"\"\"" jenkins_key "\"\"\""
+                } else {
+                  print $0
+                }
+              }' /var/jenkins_home/init.groovy.d/03-ssh-cli-auth.groovy > /tmp/03-ssh-cli-auth.groovy
+              mv /tmp/03-ssh-cli-auth.groovy /var/jenkins_home/init.groovy.d/03-ssh-cli-auth.groovy
+              
+              # Do the same for the reference directory
+              cp /var/jenkins_home/init.groovy.d/02-credentials.groovy /usr/share/jenkins/ref/init.groovy.d/02-credentials.groovy
+              cp /var/jenkins_home/init.groovy.d/03-ssh-cli-auth.groovy /usr/share/jenkins/ref/init.groovy.d/03-ssh-cli-auth.groovy
+              
+              echo "Init scripts prepared successfully."
+
+      containers:
+        - name: jenkins
+          image: jenkins/jenkins:lts
+          ports:
+            - containerPort: 8080
+              name: web
+            - containerPort: 50000
+              name: agent
+            - containerPort: 22
+              name: ssh
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+            - name: plugins-init
+              mountPath: /var/jenkins_plugins/plugins.txt
+              subPath: plugins.txt
+            - name: init-scripts
+              mountPath: /usr/share/jenkins/ref/init.groovy.d/
+            - name: ssh-key-volume
+              mountPath: {{ jenkins_ssh_dir }}
+            - name: ssh-config-volume
+              mountPath: {{ jenkins_ssh_dir }}/
+          env:
+            - name: JAVA_OPTS
+              value: "-Djenkins.install.runSetupWizard=false"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting Jenkins..."
+              echo "Waiting for plugins..."
+              while [ ! -d "/var/jenkins_home/plugins" ]; do
+                echo "Plugins directory not found. Retrying..."
+                sleep 5
+              done
+
+              echo "Ensuring init scripts directory exists..."
+              mkdir -p /var/jenkins_home/init.groovy.d
+              
+              echo "Running Jenkins..."
+              exec /usr/bin/tini -- /usr/local/bin/jenkins.sh
+
+      volumes:
+        - name: jenkins-home
+          persistentVolumeClaim:
+            claimName: jenkins-pvc
+        - name: plugins-init
+          configMap:
+            name: jenkins-plugins
+        - name: init-scripts
+          configMap:
+            name: jenkins-init-scripts
+        - name: ssh-config-volume
+          configMap:
+            name: jenkins-ssh-config
+        - name: ssh-key-volume
+          secret:
+            secretName: {{ secret_name_volume_key }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+  namespace: {{ jenkins_namespace }}
+spec:
+  type: NodePort
+  ports:
+    - port: {{ container_port }}
+      targetPort: 8080
+      nodePort: {{ node_port }}
+      name: web
+    - port: {{ agent_port }}
+      targetPort: 50000
+      nodePort: {{ agent_node_port }}
+      name: agent
+    - port: {{ ssh_port }}
+      targetPort: 22
+      nodePort: {{ ssh_node_port }}
+      name: ssh
+  selector:
+    app: jenkins
