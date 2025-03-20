@@ -28,6 +28,9 @@ module "security" {
   jenkins_node_port       = var.NODE_PORT
   jenkins_container_port  = var.CONTAINER_PORT
   jenkins_agent_node_port = var.AGENT_NODE_PORT
+  jenkins_ssh_port        = var.JENKINS_SSH_PORT
+  jenkins_ssh_node_port   = var.SSH_NODE_PORT
+
 }
 
 module "compute" {

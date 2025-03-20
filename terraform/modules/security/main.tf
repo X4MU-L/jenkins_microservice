@@ -46,6 +46,21 @@ resource "aws_security_group" "jenkins" {
   }
 
   ingress {
+    from_port   = var.jenkins_ssh_node_port
+    to_port     = var.jenkins_ssh_node_port
+    protocol    = "tcp"
+    cidr_blocks = var.ingress_cidr_blocks
+    description = "Jenkins SSH NodePort"
+  }
+
+  ingress {
+    from_port   = var.jenkins_ssh_port
+    to_port     = var.jenkins_ssh_port
+    protocol    = "tcp"
+    cidr_blocks = var.ingress_cidr_blocks
+    description = "Jenkins SSH port"
+  }
+  ingress {
     from_port   = var.jenkins_container_port
     to_port     = var.jenkins_container_port
     protocol    = "tcp"

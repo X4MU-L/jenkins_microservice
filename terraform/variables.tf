@@ -65,6 +65,16 @@ variable "AGENT_NODE_PORT" {
   description = "NodePort for Jenkins JNLP agents"
   type        = number
 }
+
+variable "JENKINS_SSH_PORT" {
+  description = "Port for Jenkins SSH interface"
+  type        = number
+}
+
+variable "SSH_NODE_PORT" {
+  description = "Port for SSH Nodeport to kubernetes"
+  type        = number
+}
 variable "SECRET_NAME_VOLUME_KEY" {
   description = "The secret name for the volume key in kubernetes"
   type        = string
@@ -90,9 +100,7 @@ variable "APP_AUTHOR" {
   type        = string
 
 }
-
 variable "GITHUB_USERNAME" {
   description = "The github username"
   type        = string
-
 }

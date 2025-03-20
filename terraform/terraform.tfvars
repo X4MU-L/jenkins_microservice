@@ -9,7 +9,5 @@ tags = {
   App   = "ansible-learn"
   Other = "ansible"
 }
-jenkins_port       = 8081
-jenkins_agent_port = 50001
-deployment_type    = "ec2"
-apps               = ["Jenkins", "Services"]
+deployment_type = "ec2"
+apps            = ["Jenkins", "Services"]

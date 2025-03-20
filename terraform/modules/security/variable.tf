@@ -41,3 +41,13 @@ variable "jenkins_agent_node_port" {
   description = "The nodeport for Jenkins agent JPNL"
   type        = number
 }
+
+variable "jenkins_ssh_port" {
+  description = "The port for Jenkins SSH"
+  type        = number
+}
+
+variable "jenkins_ssh_node_port" {
+  description = "The nodeport for Jenkins SSH"
+  type        = number
+}
