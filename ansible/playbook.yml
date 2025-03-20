@@ -2,11 +2,16 @@
 # Playbook to setup the application infrastructure
 # This playbook will setup the application infrastructure on AWS EC2 instances
 - name: Configure Jenkins Host
-  become: true
   hosts: jenkins
   roles:
-    - role: jenkins
-      tags: [jenkins, cicd, new]
+    - role: k8s
+      tags: [jenkins, kubernetes, setup]
+    - role: jenkins_user
+      tags: [jenkins, secrets, setup]
+    - role: jenkins_k8s
+      tags: [jenkins, kubernetes, secrets]
+    - role: jenkins_java
+      tags: [jenkins, java]
 
 - name: Configure Application Server
   hosts: servers
