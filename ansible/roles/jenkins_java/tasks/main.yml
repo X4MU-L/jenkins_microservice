@@ -1,0 +1,33 @@
+- name: Install Java for Jenkins CLI
+  ansible.builtin.apt:
+    name: openjdk-17-jre-headless
+    state: present
+    update_cache: true
+  become: true
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Download Jenkins CLI JAR
+  ansible.builtin.get_url:
+    url: "http://localhost:{{ env_vars.NODE_PORT }}/jnlpJars/jenkins-cli.jar"
+    dest: "/tmp/jenkins-cli.jar"
+    mode: '0644'
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Execute the script
+  ansible.builtin.command: "{{ ansible_env.HOME }}/jenkins-cli.sh"
+  changed_when: false
+  register: script_output
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Print script output
+  ansible.builtin.debug:
+    var: script_output.stdout
+  tags:
+    - jenkins
+    - kubernetes
