@@ -1,0 +1,10 @@
+Host *
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+# Default jenkins account in the kubernetes: {{ jenkins_admin_username }}@localhost
+Host localhost
+    HostName localhost
+    IdentityFile ~/.ssh/jenkins_rsa
+    IdentitiesOnly yes
+    User {{ jenkins_admin_username }}

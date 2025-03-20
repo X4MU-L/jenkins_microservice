@@ -1,0 +1,105 @@
+- name: Create Jenkins user
+  ansible.builtin.user:
+    name: "{{ jenkins_user }}"
+    password: "{{ jenkins_password | password_hash('sha512') }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+  become: true
+
+- name: Allow Jenkins user to sudo without password
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    state: present
+    regexp: "^{{ jenkins_user }}"
+    line: "{{ jenkins_user }} ALL=(ALL) NOPASSWD: ALL"
+    validate: '/usr/sbin/visudo -cf %s'
+  become: true
+
+- name: Store the original user's home directory as a fact
+  ansible.builtin.set_fact:
+    user_home: "{{ ansible_env.HOME }}"
+
+# - name: Create SSH directory without changing ownership
+#   ansible.builtin.file:
+#     path: "{{ user_home }}/.ssh"
+#     state: directory
+#     mode: '0700'
+#   become: true  # Keeps the original user's home directory
+
+- name: Ensure ACL is installed
+  ansible.builtin.apt:
+    name: acl
+    state: present
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Grant jenkins_user access to .ssh directory
+  ansible.posix.acl:
+    path: "{{ user_home }}/.ssh"
+    entity: "{{ jenkins_user }}"
+    etype: user
+    permissions: "rwx"
+    state: present
+  become: true
+
+- name: Generate SSH key for Jenkins user
+  community.crypto.openssh_keypair:
+    path: "{{ ansible_env.HOME }}/.ssh/jenkins_rsa"
+    type: rsa
+    size: 4096
+    state: present
+    force: false
+  register: jenkins_ssh_key
+
+- name: Append Jenkins public key to authorized_keys
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.ssh/authorized_keys"
+    line: "{{ jenkins_ssh_key.public_key }}"
+    create: true  # Creates the file if it doesn't exist
+    state: present
+
+- name: Configure SSH to not prompt for password
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+  become: true
+  notify: Restart SSH service
+
+- name: Ensure SSH prefers public key authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: "^#?PubkeyAuthentication"
+    line: "PubkeyAuthentication yes"
+  become: true
+  notify: Restart SSH service
+
+- name: Get generated private key
+  ansible.builtin.slurp:
+    src: "{{ ansible_env.HOME }}/.ssh/jenkins_rsa"
+  register: jenkins_private_key
+
+- name: Get generated public key
+  ansible.builtin.slurp:
+    src: "{{ ansible_env.HOME }}/.ssh/jenkins_rsa.pub"
+  register: jenkins_public_key
+
+- name: Create Kubernetes config file on remote
+  ansible.builtin.template:
+    src: ssh.server-config.j2
+    dest: "{{ ansible_env.HOME }}/.ssh/config"
+    mode: "0600"
+
+- name: Store keys locally for Jenkins configuration
+  ansible.builtin.copy:
+    content: "{{ item.content | b64decode }}"
+    dest: "~/.ssh/{{ item.name }}"
+    mode: "{{ '0600' if item.name == 'jenkins_id_rsa' else '0644' }}"
+  delegate_to: localhost
+  become: false
+  with_items:
+    - { content: "{{ jenkins_private_key.content }}", name: "jenkins_id_rsa" }
+    - { content: "{{ jenkins_public_key.content }}", name: "jenkins_id_rsa.pub" }
