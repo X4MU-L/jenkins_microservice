@@ -10,7 +10,7 @@
 
 - name: Download Jenkins CLI JAR
   ansible.builtin.get_url:
-    url: "http://localhost:{{ env_vars.NODE_PORT }}/jnlpJars/jenkins-cli.jar"
+    url: "http://localhost:{{ node_port }}/jnlpJars/jenkins-cli.jar"
     dest: "/tmp/jenkins-cli.jar"
     mode: '0644'
   tags:
