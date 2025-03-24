@@ -1,0 +1,30 @@
+---
+- name: Set worker variables
+  ansible.builtin.set_fact:
+    app_directory: "{{ worker_app_directory }}"
+    container_name: "{{ worker_container_name }}"
+
+- name: Create worker application directory
+  ansible.builtin.file:
+    path: "{{ app_directory }}"
+    state: directory
+    mode: '0755'
+
+- name: Stop and remove existing worker container if it exists
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    state: absent
+
+- name: Pull the worker Docker image
+  community.docker.docker_image:
+    name: "{{ worker_image }}"
+    source: pull
+
+- name: Run the worker container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ worker_image }}"
+    state: started
+    env:
+      REDIS_URL: "{{ redis_url }}"
+      API_URL: "{{ backend_url }}"

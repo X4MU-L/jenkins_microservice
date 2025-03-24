@@ -1,0 +1,18 @@
+---
+- name: Ensure Docker is installed on all deployment targets
+  ansible.builtin.apt:
+    name: docker.io
+    state: present
+    update_cache: true
+
+- name: Include backend tasks
+  ansible.builtin.include_tasks: backend.yml
+  when: deploy_component == 'backend' or deploy_component == 'all'
+
+- name: Include frontend tasks
+  ansible.builtin.include_tasks: frontend.yml
+  when: deploy_component == 'frontend' or deploy_component == 'all'
+
+- name: Include worker tasks
+  ansible.builtin.include_tasks: worker.yml
+  when: deploy_component == 'worker' or deploy_component == 'all'

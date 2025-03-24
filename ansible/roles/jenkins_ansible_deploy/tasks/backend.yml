@@ -1,0 +1,35 @@
+---
+- name: Set backend variables
+  ansible.builtin.set_fact:
+    app_directory: "{{ backend_app_directory }}"
+    container_name: "{{ backend_container_name }}"
+
+- name: Create backend application directory
+  ansible.builtin.file:
+    path: "{{ app_directory }}"
+    state: directory
+    mode: '0755'
+
+- name: Stop and remove existing backend container if it exists
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    state: absent
+
+- name: Pull the backend Docker image
+  community.docker.docker_image:
+    name: "{{ backend_image }}"
+    source: pull
+
+- name: Run the backend container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ backend_image }}"
+    state: started
+    ports:
+      - "{{ backend_port }}:3000"
+    env:
+      NODE_ENV: "production"
+      DB_HOST: "{{ db_host }}"
+      DB_USER: "{{ db_user }}"
+      DB_PASSWORD: "{{ db_password }}"
+      DB_NAME: "{{ db_name }}"

@@ -1,0 +1,26 @@
+---
+# Common defaults
+jenkins_ansible_deploy_container_name: "app-container"
+
+# Backend defaults
+jenkins_ansible_deploy_backend_app_directory: "/opt/backend"
+jenkins_ansible_deploy_backend_container_name: "backend"
+jenkins_ansible_deploy_backend_image: "your-registry/backend:latest"
+jenkins_ansible_deploy_backend_port: 3000
+jenkins_ansible_deploy_db_host: "localhost"
+jenkins_ansible_deploy_db_user: "dbuser"
+jenkins_ansible_deploy_db_password: "dbpassword"
+jenkins_ansible_deploy_db_name: "appdb"
+
+# Frontend defaults
+jenkins_ansible_deploy_frontend_app_directory: "/opt/frontend"
+jenkins_ansible_deploy_frontend_container_name: "frontend"
+jenkins_ansible_deploy_frontend_image: "your-registry/frontend:latest"
+jenkins_ansible_deploy_frontend_port: 80
+jenkins_ansible_deploy_backend_url: "http://api.example.com"
+
+# Worker defaults
+jenkins_ansible_deploy_worker_app_directory: "/opt/worker"
+jenkins_ansible_deploy_worker_container_name: "worker"
+jenkins_ansible_deploy_worker_image: "your-registry/worker:latest"
+jenkins_ansible_deploy_redis_url: "redis://localhost:6379"

@@ -1,0 +1,31 @@
+---
+- name: Set frontend variables
+  ansible.builtin.set_fact:
+    app_directory: "{{ frontend_app_directory }}"
+    container_name: "{{ frontend_container_name }}"
+
+- name: Create frontend application directory
+  ansible.builtin.file:
+    path: "{{ app_directory }}"
+    state: directory
+    mode: '0755'
+
+- name: Stop and remove existing frontend container if it exists
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    state: absent
+
+- name: Pull the frontend Docker image
+  community.docker.docker_image:
+    name: "{{ frontend_image }}"
+    source: pull
+
+- name: Run the frontend container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ frontend_image }}"
+    state: started
+    ports:
+      - "{{ frontend_port }}:3000"
+    env:
+      NEXT_PUBLIC_API_URL: "{{ backend_url }}"
