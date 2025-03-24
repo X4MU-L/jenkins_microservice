@@ -3,6 +3,20 @@
 # This playbook will setup the application infrastructure on AWS EC2 instances
 - name: Configure Jenkins Host
   hosts: jenkins
+  pre_tasks:
+    - name: Print Jenkins URL
+      ansible.builtin.debug:
+        msg: "jenkins url: {{ jenkins_url }}"
+
+    # - name: Set Jenkins URL fact for production environment
+    #   ansible.builtin.set_fact:
+    #     jenkins_url: "https://{{ ansible_host }}:{{ node_port }}"
+    #   when: environment == "production"
+
+    # - name: Set Jenkins URL fact for non-production environments
+    #   ansible.builtin.set_fact:
+    #     jenkins_url: "http://{{ ansible_host }}:{{ node_port }}"
+    #   when: environment != "production"
   roles:
     - role: k8s
       tags: [jenkins, kubernetes, setup]
@@ -12,6 +26,8 @@
       tags: [jenkins, kubernetes, secrets]
     - role: jenkins_java
       tags: [jenkins, java]
+    - role: jenkins_pipeline
+      tags: [jenkins, pipeline]
 
 - name: Configure Application Server
   hosts: servers
@@ -23,3 +39,12 @@
     - role: nginx
       tags: [nginx, webapp]
 
+
+- name: Deploy  applications using jenkins pipeline deploy
+  hosts: servers
+  become: true
+  roles:
+    - role: jenkins_ansible_deploy
+      tags: [jenkins_deploy, application]
+      vars:
+        jenkins_ansible_deploy_deploy_component: all

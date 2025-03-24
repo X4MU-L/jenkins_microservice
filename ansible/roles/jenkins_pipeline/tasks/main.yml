@@ -1,0 +1,91 @@
+- name: Wait for Jenkins pod to be ready
+  ansible.builtin.command: kubectl wait --namespace=jenkins --for=condition=ready pod --selector=app=jenkins --timeout=300s
+  register: jenkins_ready
+  changed_when: false
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Get Jenkins pod name
+  ansible.builtin.command: kubectl get pod -n jenkins -l app=jenkins -o jsonpath='{.items[0].metadata.name}'
+  register: jenkins_pod
+  changed_when: false
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Execute Groovy script to create GitHub credentials
+  ansible.builtin.shell: >
+    kubectl exec -n {{ jenkins_namespace }} {{ jenkins_pod.stdout }}  -- \
+    java -jar /var/jenkins_home/jenkins-cli.jar -s http://localhost:8080/ \
+    -auth {{ jenkins_admin_username }}:{{ jenkins_admin_password }} \
+    groovy /var/jenkins_home/function-scripts/create-github-credentials.groovy
+  args:
+    executable: /bin/bash
+  register: github_creds_result
+  changed_when: github_creds_result.rc == 0
+  failed_when: github_creds_result.rc != 0
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Execute Groovy script to create DockerHub credentials
+  ansible.builtin.shell: >
+    kubectl exec -n {{ jenkins_namespace }} {{ jenkins_pod.stdout }} -- \
+    java -jar /var/jenkins_home/jenkins-cli.jar -s http://localhost:8080/ \
+    -auth {{ jenkins_admin_username }}:{{ jenkins_admin_password }} \
+    groovy /var/jenkins_home/function-scripts/create-dockerhub-credentials.groovy \
+    --username="{{ dockerhub_username }}" \
+    --password="{{ dockerhub_password }}"
+  args:
+    executable: /bin/bash
+  register: dockerhub_creds_result
+  no_log: true
+  changed_when: dockerhub_creds_result.rc == 0
+  failed_when: dockerhub_creds_result.rc != 0
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Execute Groovy script to create pipeline job
+  ansible.builtin.shell: >
+    kubectl exec -n {{ jenkins_namespace }} {{ jenkins_pod.stdout }} -- \
+    java -jar /var/jenkins_home/jenkins-cli.jar -s http://localhost:8080/ \
+    -auth {{ jenkins_admin_username }}:{{ jenkins_admin_password }} \
+    groovy /var/jenkins_home/function-scripts/create-pipeline-job.groovy \
+    --repo="{{ git_repo_url }}" \
+    # --branches="{{ git_branches | default('main') }}" \
+    # --path="{{ jenkinsfile_path | default('Jenkinsfile') }}" \
+    # --id="github-ssh-key"
+  args:
+    executable: /bin/bash
+  register: pipeline_job_result
+  changed_when: pipeline_job_result.rc == 0
+  failed_when: pipeline_job_result.rc != 0
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Set up GitHub webhook
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ github_username }}/{{ git_repo_name }}/hooks"
+    method: POST
+    body_format: json
+    headers:
+      Authorization: "token {{ github_access_token }}"
+      Accept: "application/vnd.github.v3+json"
+    body:
+      name: "web"
+      active: true
+      events: ["push", "pull_request"]
+      config:
+        url: "{{ jenkins_url }}/github-webhook/"
+        content_type: "json"
+        insecure_ssl: "0"
+    status_code: 201
+  register: webhook_result
+  failed_when: webhook_result.status != 201 and 'already exists' not in webhook_result.json.message|default('')
+  when: github_access_token is defined and github_access_token != ""
+  tags:
+    - jenkins
+    - github
