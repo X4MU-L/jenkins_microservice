@@ -71,7 +71,6 @@ data:
     instance.save()
     println("Security setup completed with SSH enabled")
 
-  02-credentials.groovy: |
     #!/usr/bin/env groovy
 
     import jenkins.model.*
@@ -92,7 +91,7 @@ data:
     store.addCredentials(domain, credentials)
     println("Credentials setup completed")
 
-  03-ssh-cli-auth.groovy: |
+  02-ssh-cli-auth.groovy: |
     #!/usr/bin/env groovy
 
     import jenkins.model.*

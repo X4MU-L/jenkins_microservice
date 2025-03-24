@@ -25,38 +25,10 @@
     - kubernetes
     - setup
 
-- name: Read .env file and store to env_lines
-  ansible.builtin.command: bash -c 'set -o pipefail && cat "{{ project_root }}/.env" | grep -v "^#" | grep "="'
-  register: env_lines
-  delegate_to: localhost
-  become: false
-  tags:
-    - jenkins
-    - kubernetes
-    - setup
-
-- name: Initialize env_vars dictionary for storing .env values
-  ansible.builtin.set_fact:
-    env_vars: {}
-  tags:
-    - jenkins
-    - kubernetes
-    - setup
-
-- name: Process each line of .env file
-  ansible.builtin.set_fact:
-    env_vars: "{{ env_vars | combine({ item.split('=')[0]: item.split('=', 1)[1] | trim('\"') }) }}"
-  loop: "{{ env_lines.stdout_lines }}"
-  when: item | length > 0
-  no_log: true
-  tags:
-    - jenkins
-    - kubernetes
-    - setup
 
 - name: Get AWS Server SSH key
   ansible.builtin.slurp:
-    src: "~/.ssh/{{ env_vars.APP_NAME }}-key.pem"
+    src: "~/.ssh/{{ app_name }}-key.pem"
   register: aws_server_ssh
   delegate_to: localhost
   become: false
@@ -66,7 +38,7 @@
 
 - name: Read GitHub SSH private key
   ansible.builtin.slurp:
-    src: "~/.ssh/{{ env_vars.GITHUB_SSH_KEY_NAME }}"
+    src: "~/.ssh/{{ github_ssh_key_name }}"
   register: github_ssh
   delegate_to: localhost
   become: false
@@ -139,7 +111,6 @@
     dest: "{{ user_home }}/kubernetes/jenkins-secret.yml"
     mode: "0600"
   vars:
-    secret_name_volume_key: "{{ env_vars.SECRET_NAME_VOLUME_KEY }}"
     github_ssh_content: "{{ github_ssh.content }}"
     aws_server_ssh_content: "{{ aws_server_ssh.content }}"
     jenkins_ssh_public_key: "{{ jenkins_public_key.content }}"
@@ -154,14 +125,6 @@
     src: jenkins.deployment.yml.j2
     dest: "{{ user_home }}/kubernetes/jenkins.deployment.yml"
     mode: "0600"
-  vars:
-    secret_name_volume_key: "{{ env_vars.SECRET_NAME_VOLUME_KEY }}"
-    node_port: "{{ env_vars.NODE_PORT }}"
-    container_port: "{{ env_vars.CONTAINER_PORT }}"
-    agent_port: "{{ env_vars.AGENT_PORT }}"
-    agent_node_port: "{{ env_vars.AGENT_NODE_PORT }}"
-    ssh_port: "{{ env_vars.JENKINS_SSH_PORT }}"
-    ssh_node_port: "{{ env_vars.SSH_NODE_PORT }}"
   tags:
     - jenkins
     - kubernetes
@@ -202,9 +165,6 @@
     src: jenkins.init-script-configmap.yml.j2
     dest: "{{ user_home }}/kubernetes/jenkins.init-script-configmap.yml"
     mode: "0600"
-  vars:
-  # jenkins_ssh_public_key: "{{ jenkins_public_key.content | b64decode }}"
-    github_ssh_username: "{{ env_vars.GITHUB_USERNAME }}"
   tags:
     - jenkins
     - kubernetes
@@ -215,8 +175,16 @@
     src: ssh.config.yml.j2
     dest: "{{ user_home }}/kubernetes/ssh.config.yml"
     mode: "0600"
-  vars:
-    github_ssh_username: "{{ env_vars.GITHUB_USERNAME }}"
+  tags:
+    - jenkins
+    - kubernetes
+    - secrets
+
+- name: Create Kubernetes configMap for groovy function
+  ansible.builtin.template:
+    src: jenkin.credentials-scripts.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkin.credentials-scripts.yml"
+    mode: "0600"
   tags:
     - jenkins
     - kubernetes
@@ -281,6 +249,16 @@
   tags:
     - jenkins
     - kubernetes
+# Apply Kubernetes ConfigMap for groovy functions
+- name: Apply Kubernetes ConfigMap for groovy functions
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkin.credentials-scripts.yml"
+    apply: true
+  register: function_script_changed
+  tags:
+    - jenkins
+    - kubernetes
 # Apply Kubernetes Deployment
 - name: Apply Kubernetes Deployment
   kubernetes.core.k8s:
@@ -301,7 +279,8 @@
     volume_changed.changed or
     plugins_configmap_changed.changed or
     init_script_changed.changed or
-    deployment_changed.changed)
+    deployment_changed.changed or
+    function_script_changed.changed)
   changed_when: false
   tags:
     - jenkins
@@ -358,6 +337,4 @@
     src: jenkin.access-script.sh.j2
     dest: "{{ user_home }}/jenkins-cli.sh"
     mode: '0755'
-  vars:
-    ssh_node_port: "{{ env_vars.SSH_NODE_PORT }}"
-    ssh_port: "{{ env_vars.JENKINS_SSH_PORT }}"
+

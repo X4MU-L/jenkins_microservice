@@ -9,7 +9,7 @@ SSH_KEY="{{ user_home }}/.ssh/jenkins_rsa"
 JENKINS_USER="{{ jenkins_admin_username }}"
 
 # Start port-forward in the background
-kubectl port-forward -n $NAMESPACE svc/jenkins $SSH_PORT:{{ ssh_port }} &
+kubectl port-forward -n $NAMESPACE svc/jenkins $SSH_PORT:{{ jenkins_ssh_port }} &
 PF_PID=$!
 
 # Give port-forward time to establish
