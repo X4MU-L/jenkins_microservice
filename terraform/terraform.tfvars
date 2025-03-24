@@ -9,6 +9,5 @@ tags = {
   App   = "ansible-learn"
   Other = "ansible"
 }
-apps            = ["jenkins", "servers"]
+apps            = ["Jenkins", "Services"]
 deployment_type = "ec2"
-
