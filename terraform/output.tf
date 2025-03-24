@@ -18,5 +18,5 @@ output "key_pair_file_name" {
 }
 
 output "jenkins_url" {
-  value = var.deployment_type == "ec2" ? "http://${module.compute.jenkins_instance_ip}:8081" : module.compute.load_balancer_dns
+  value = var.deployment_type == "ec2" ? "http://${module.compute.jenkins_instance_ip}:" : module.compute.load_balancer_dns
 }

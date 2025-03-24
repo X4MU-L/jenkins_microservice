@@ -23,7 +23,7 @@ module "security" {
   vpc_id                  = module.network.vpc_id
   egress_cidr_blocks      = var.egress_cidr_blocks
   ingress_cidr_blocks     = var.ingress_cidr_blocks
-  app_name                = "ansible-with-tags"
+  app_name                = var.APP_NAME
   tags                    = var.tags
   jenkins_node_port       = var.NODE_PORT
   jenkins_container_port  = var.CONTAINER_PORT
