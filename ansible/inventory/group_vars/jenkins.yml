@@ -9,15 +9,14 @@ service_name: "jenkins"
 jenkins_namespace: "jenkins"
 context_path: "/jenkins"
 jenkins_user: jenkins
-jenkins_admin_username: jenkins_admin
-jenkins_admin_password: securePassword123
 jenkins_password: securePassword123
 jenkins_home: "/var/jenkins_home"
 jenkins_ssh_dir: "{{ jenkins_home }}/.ssh"
 server_ssh_dir: "{{ ansible_env.HOME }}/.ssh"
-
+jenkins_url: "{% if environment == 'production' %}https://{{ ansible_host }}:{{ node_port }}{% else %}http://{{ ansible_host }}:{{ node_port }}{% endif %}"
+git_repo_url: "git@github.com:{{ github_username }}/{{ github_repo_name }}.git"
 http_port: 8080
-agent_port: 50000
+
 
 plugins:
   - name: "kubernetes"
