@@ -261,17 +261,38 @@ terraform: validate-env copy-env
 	@echo "🚀 Running Terraform..."
 	@cd $(TERRAFORM_DIR) && terraform init && terraform validate && terraform apply -auto-approve
 
-# Run Ansible
+# Target to run Ansible
 .PHONY: ansible
 ansible: validate-env
 	@echo "🔧 Running Ansible Playbook..."
-	@cd $(ANSIBLE_DIR) && ansible-playbook playbook.yml --private-key=$(SSH_FOLDER_PATH)/$(SSH_KEY_NAME) -u $(SSH_USER)
+	@echo "$(NODE_PORT), $(CONTAINER_PORT), $(JENKINS_SSH_PORT), $(SSH_NODE_PORT), $(AGENT_PORT), $(AGENT_NODE_PORT)"
+	@cd $(ANSIBLE_DIR) && ansible-playbook playbook.yml \
+	--tags jenkins --private-key="$(SSH_FOLDER_PATH)/$(SSH_KEY_NAME)" -u $(SSH_USER) \
+	-e git_branch="main" \
+	-e jenkinsfile_path="Jenkinsfile" \
+	-e dockerhub_username="$(DOCKER_USERNAME)" \
+	-e dockerhub_password='9-G63;qP*ke8Ym!' \
+	-e jenkins_namespace="$(JENKINS_NAMESPACE)" \
+	-e container_port="$(CONTAINER_PORT)" \
+	-e node_port="$(NODE_PORT)" \
+	-e jenkins_ssh_port="$(JENKINS_SSH_PORT)" \
+	-e ssh_node_port="$(SSH_NODE_PORT)" \
+	-e agent_port="$(AGENT_PORT)" \
+	-e agent_node_port="$(AGENT_NODE_PORT:-30050)" \
+	-e github_username="$(GITHUB_USERNAME)" \
+	-e github_access_token="$(GITHUB_ACCESS_TOKEN)" \
+	-e github_repo_name="$(GITHUB_REPO_NAME)" \
+	-e github_ssh_key_name="$(GITHUB_SSH_KEY_FILE_NAME)" \
+	-e secret_name_volume_key="$(SECRET_NAME_VOLUME_KEY)" \
+	-e app_name="$(APP_NAME)" \
+	-e jenkins_admin_password="$(JENKINS_ADMIN_PASSWORD)" \
+	-e jenkins_admin_username="$(JENKINS_ADMIN_USERNAME)"
 
 # Push changes to GitHub
 .PHONY: push-to-github
 push-to-github:
 	@echo "🔄 Pushing changes to GitHub..."
-	@git add . && git commit -m "Automated deployment update" || true
+	
 	@git push $(GIT_URL_SSH) || git push $(GIT_URL_HTTPS)
 
 # Full Deployment
