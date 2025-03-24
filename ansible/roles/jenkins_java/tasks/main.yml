@@ -8,6 +8,27 @@
     - jenkins
     - kubernetes
 
+- name: Get Jenkins pod name
+  ansible.builtin.command: kubectl get pod -n {{ jenkins_namespace }} -l app=jenkins -o jsonpath='{.items[0].metadata.name}'
+  register: jenkins_pod
+  changed_when: false
+  tags:
+    - jenkins
+    - kubernetes
+
+- name: Download Jenkins CLI jar in the Jenkins pod
+  ansible.builtin.shell: >
+    kubectl exec -n {{ jenkins_namespace }} {{ jenkins_pod.stdout }} -- \
+    curl -o /var/jenkins_home/jenkins-cli.jar http://localhost:8080/jnlpJars/jenkins-cli.jar
+  args:
+    executable: /bin/bash
+  register: download_cli_result
+  changed_when: download_cli_result.rc == 0
+  failed_when: download_cli_result.rc != 0
+  tags:
+    - jenkins
+    - kubernetes
+
 - name: Download Jenkins CLI JAR
   ansible.builtin.get_url:
     url: "http://localhost:{{ node_port }}/jnlpJars/jenkins-cli.jar"
