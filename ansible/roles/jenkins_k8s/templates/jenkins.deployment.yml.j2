@@ -117,7 +117,7 @@ spec:
             - name: init-scripts
               mountPath: /usr/share/jenkins/ref/init.groovy.d/
             - name: jenkins-function-scripts
-              mountPath: /var/jenkins_home/function-scripts/
+              mountPath: /var/jenkins_home/function_scripts/
             - name: ssh-key-volume
               mountPath: {{ jenkins_ssh_dir }}
             - name: ssh-config-volume
