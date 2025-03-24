@@ -6,7 +6,7 @@ version: "2.401.1"  # Specify Jenkins version
 admin_user: "admin"
 admin_password: "{{ vault_jenkins_admin_password | default('admin') }}"  # Use Ansible Vault for production
 service_name: "jenkins"
-jenkins_namespace: "jenkins"
+
 context_path: "/jenkins"
 jenkins_user: jenkins
 jenkins_password: securePassword123
