@@ -97,7 +97,7 @@ ansible: validate-env
 	-e jenkins_ssh_port="$(JENKINS_SSH_PORT)" \
 	-e ssh_node_port="$(SSH_NODE_PORT)" \
 	-e agent_port="$(AGENT_PORT)" \
-	-e agent_node_port="$(AGENT_NODE_PORT:-30050)" \
+	-e agent_node_port="$(AGENT_NODE_PORT)" \
 	-e github_username="$(GITHUB_USERNAME)" \
 	-e github_access_token="$(GITHUB_ACCESS_TOKEN)" \
 	-e github_repo_name="$(GITHUB_REPO_NAME)" \

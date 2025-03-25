@@ -122,9 +122,9 @@ class PipelineJobCreator {
             
             // Save and build
             pipelineJob.save()
-             // Trigger initial build with correct method
-            pipelineJob.scheduleBuild2(0, null, new Action[0])
-            
+            // Trigger initial build with correct method
+            // Option 2: If you want to specify a cause
+            pipelineJob.scheduleBuild(0, new Cause.UserIdCause())
             println("Pipeline job ${jobName} created successfully for branch ${normalizedBranch}!")
             return 0
         } catch (Exception e) {
