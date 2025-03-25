@@ -9,9 +9,11 @@
     - jenkins
     - kubernetes
     - setup
+
 - name: Store the original user's home directory as a fact
   ansible.builtin.set_fact:
     user_home: "{{ ansible_env.HOME }}"
+  no_log: true
   tags:
     - jenkins
     - kubernetes
@@ -24,7 +26,6 @@
     - jenkins
     - kubernetes
     - setup
-
 
 - name: Get AWS Server SSH key
   ansible.builtin.slurp:
@@ -67,6 +68,21 @@
 - name: Set GitHub SSH Private Key
   ansible.builtin.set_fact:
     github_ssh_private_key: "{{ github_ssh.content | b64decode }}"
+  tags:
+    - jenkins
+    - secrets
+
+- name: Retrieve GitHub SSH host keys
+  ansible.builtin.command: ssh-keyscan github.com
+  register: github_hostskeys
+  changed_when: false
+  tags:
+    - jenkins
+    - secrets
+
+- name: Select ED25519 host key for GitHub
+  ansible.builtin.set_fact:
+    github_host_key: "{{ github_hostskeys.stdout_lines | select('contains', 'ssh-ed25519') | first }}"
   tags:
     - jenkins
     - secrets
@@ -114,7 +130,6 @@
     github_ssh_content: "{{ github_ssh.content }}"
     aws_server_ssh_content: "{{ aws_server_ssh.content }}"
     jenkins_ssh_public_key: "{{ jenkins_public_key.content }}"
-    known_hosts_content: "{{ known_hosts.content }}"
   tags:
     - jenkins
     - kubernetes
@@ -165,6 +180,21 @@
     src: jenkins.init-script-configmap.yml.j2
     dest: "{{ user_home }}/kubernetes/jenkins.init-script-configmap.yml"
     mode: "0600"
+  # vars:
+  #   jenkins_ssh_public_key_path: "/var/jenkins_home/.ssh/jenkins-ssh-public-key.pub"
+  #   # github
+  #   git_credentials_id: "github-credentials"
+  #   git_description: "GitHub SSH Credentials"
+  #   git_user: "git"
+  #   github_ssh_key_path: "/var/jenkins_home/.ssh/github-ssh-key"
+  #   enable_webhook: "true"
+  #   # aws Credentials
+  #   aws_credentials_id: "aws-credentials"
+  #   aws_description: "AWS SSH Credentials"
+  #   aws_ssh_key_path: "/var/jenkins_home/.ssh/aws-server-key.pem"
+  #   # docker
+  #   docker_credentials_id: "docker-credentials"
+  #   docker_description: "Docker Credentials"
   tags:
     - jenkins
     - kubernetes
@@ -175,6 +205,8 @@
     src: ssh.config.yml.j2
     dest: "{{ user_home }}/kubernetes/ssh.config.yml"
     mode: "0600"
+  vars:
+    known_hosts_content: "{{ known_hosts.content | b64decode }}"
   tags:
     - jenkins
     - kubernetes
@@ -182,8 +214,8 @@
 
 - name: Create Kubernetes configMap for groovy function
   ansible.builtin.template:
-    src: jenkin.credentials-scripts.yml.j2
-    dest: "{{ user_home }}/kubernetes/jenkin.credentials-scripts.yml"
+    src: jenkins.credentials-scripts.yml.j2
+    dest: "{{ user_home }}/kubernetes/jenkins.credentials-scripts.yml"
     mode: "0600"
   tags:
     - jenkins
@@ -199,6 +231,16 @@
 - name: Set fact if Jenkins is running
   ansible.builtin.set_fact:
     jenkins_running: "{{ jenkins_pod_status.stdout != '' }}"
+# Apply Kubernetes Volumes
+- name: Apply Kubernetes Volumes
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.volume.yml"
+    apply: true
+  register: volume_changed
+  tags:
+    - jenkins
+    - kubernetes
 # Apply Kubernetes Secrets
 - name: Apply Kubernetes Secrets
   kubernetes.core.k8s:
@@ -219,16 +261,6 @@
   tags:
     - jenkins
     - kubernetes
-# Apply Kubernetes Volumes
-- name: Apply Kubernetes Volumes
-  kubernetes.core.k8s:
-    state: present
-    src: "{{ user_home }}/kubernetes/jenkins.volume.yml"
-    apply: true
-  register: volume_changed
-  tags:
-    - jenkins
-    - kubernetes
 # Apply Kubernetes ConfigMap for Plugins
 - name: Apply Kubernetes ConfigMap Plugins
   kubernetes.core.k8s:
@@ -239,13 +271,13 @@
   tags:
     - jenkins
     - kubernetes
-# Apply Kubernetes ConfigMap for Groovy Init Scripts
-- name: Apply Kubernetes ConfigMap Groovy Init Scripts
+# Apply Kubernetes ConfigMap for ssh config
+- name: Apply Kubernetes ConfigMap SSH Config
   kubernetes.core.k8s:
     state: present
-    src: "{{ user_home }}/kubernetes/jenkins.init-script-configmap.yml"
+    src: "{{ user_home }}/kubernetes/ssh.config.yml"
     apply: true
-  register: init_script_changed
+  register: ssh_config_changed
   tags:
     - jenkins
     - kubernetes
@@ -253,9 +285,19 @@
 - name: Apply Kubernetes ConfigMap for groovy functions
   kubernetes.core.k8s:
     state: present
-    src: "{{ user_home }}/kubernetes/jenkin.credentials-scripts.yml"
+    src: "{{ user_home }}/kubernetes/jenkins.credentials-scripts.yml"
     apply: true
   register: function_script_changed
+  tags:
+    - jenkins
+    - kubernetes
+# Apply Kubernetes ConfigMap for Groovy Init Scripts
+- name: Apply Kubernetes ConfigMap Groovy Init Scripts
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ user_home }}/kubernetes/jenkins.init-script-configmap.yml"
+    apply: true
+  register: init_script_changed
   tags:
     - jenkins
     - kubernetes
@@ -280,6 +322,7 @@
     plugins_configmap_changed.changed or
     init_script_changed.changed or
     deployment_changed.changed or
+    ssh_config_changed.changed or
     function_script_changed.changed)
   changed_when: false
   tags:
@@ -334,7 +377,10 @@
 # [Add instructions for creating Jenkins CLI access script]
 - name: Create Jenkins CLI access script
   ansible.builtin.template:
-    src: jenkin.access-script.sh.j2
+    src: jenkins.access-script.sh.j2
     dest: "{{ user_home }}/jenkins-cli.sh"
     mode: '0755'
-
+  tags:
+    - jenkins
+    - kubernetes
+    - setup

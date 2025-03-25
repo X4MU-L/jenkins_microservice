@@ -9,14 +9,15 @@ import hudson.plugins.git.UserRemoteConfig
 import hudson.plugins.git.extensions.impl.CloneOption
 import hudson.triggers.SCMTrigger
 import hudson.model.Cause
+import hudson.model.Action
 import com.cloudbees.plugins.credentials.CredentialsProvider
 import com.cloudbees.plugins.credentials.common.StandardCredentials
 import jenkins.model.Jenkins
 
 class PipelineJobCreator {
     
-    def createPipelineJob(String gitRepoUrl, String gitBranch, String jenkinsfilePath, String credentialsId, Boolean enableWebhook, String jobNameSuffix = "") {
-        // Same implementation as your original function
+    def createPipelineJob(String gitRepoUrl, String gitBranch, String jenkinsfilePath, 
+                           String credentialsId, Boolean enableWebhook, String jobNameSuffix = "") {
         try {
             // Get Jenkins instance
             def jenkins = Jenkins.getInstance()
@@ -29,19 +30,44 @@ class PipelineJobCreator {
             def job = jenkins.getItemByFullName(jobName)
             if (job != null) {
                 println("Job ${jobName} already exists, updating configuration...")
-                jenkins.deleteItem(job)
+                job.delete()
             }
             
             // Create new pipeline job
             def pipelineJob = jenkins.createProject(WorkflowJob.class, jobName)
             
-            // Configure Git SCM
-            def userRemoteConfig = new UserRemoteConfig(gitRepoUrl, null, null, credentialsId)
-            def branchSpec = new BranchSpec(gitBranch)
+            // Configure Git SCM with proper branch handling
+            def userRemoteConfig = new UserRemoteConfig(
+                gitRepoUrl, 
+                null, 
+                null, 
+                credentialsId
+            )
+            
+            // Normalize branch specification
+            def normalizedBranch = gitBranch.startsWith('**/') ? gitBranch : "**/${gitBranch}"
+            def branchSpecs = [new BranchSpec(normalizedBranch)]
+            
             def cloneOption = new CloneOption(true, true, null, 10)
+
+            // Configure Git SCM with host key bypass
+            // def gitExtensions = [
+            //     new hudson.plugins.git.extensions.impl.CloneOption(
+            //         shallow: true, 
+            //         noTags: false, 
+            //         reference: null, 
+            //         depth: 1
+            //     ),
+            //     new hudson.plugins.git.extensions.impl.IgnoreNotifyCommit(),
+            //     new com.cloudbees.jenkins.GitHubTrustAll()
+            // ]
+            // Environment variable to disable strict host checking
+            // def env = System.getenv().toMap()
+            // env.put("GIT_SSH_COMMAND", "ssh -o StrictHostKeyChecking=no")
+
             def gitScm = new GitSCM(
                 [userRemoteConfig],
-                [branchSpec],
+                branchSpecs,
                 false,
                 [],
                 null,
@@ -53,54 +79,53 @@ class PipelineJobCreator {
             def flowDefinition = new CpsScmFlowDefinition(gitScm, jenkinsfilePath)
             pipelineJob.setDefinition(flowDefinition)
             
-            // Enable branch specifier for GitHub webhook compatibility
-            if (pipelineJob.getDefinition() instanceof CpsScmFlowDefinition) {
-                def scm = pipelineJob.getDefinition().getScm()
-                if (scm instanceof GitSCM) {
-                    scm.setBranches([new BranchSpec(gitBranch)])
-                }
-            }
-            
-            // Set webhook trigger property
+            // Set up triggers
             def triggerProperty = new org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty()
             def triggers = []
             
-            // Configure triggers based on enableWebhook flag
+            // Webhook configuration
             if (enableWebhook) {
                 try {
-                    // First try to load the GitHub plugin class
-                    Class<?> githubTriggerClass = Class.forName("com.cloudbees.jenkins.GitHubPushTrigger")
+                    // Attempt to use GitHub webhook trigger
+                    Class<?> githubTriggerClass = Class.forName("org.jenkinsci.plugins.github.webhook.MultibranchWebhook")
                     def githubTrigger = githubTriggerClass.newInstance()
                     triggers.add(githubTrigger)
-                    println("GitHub webhook trigger enabled for ${jobName}")
-                } catch (Exception e) {
-                    println("GitHub plugin not found, falling back to SCM polling")
-                    // Fallback to SCM polling if GitHub plugin not available
-                    triggers.add(new SCMTrigger("H/15 * * * *"))
+                    println("Multibranch GitHub webhook trigger enabled for ${jobName}")
+                } catch (ClassNotFoundException e) {
+                    // Fallback to GitHub Push trigger
+                    try {
+                        Class<?> githubPushTriggerClass = Class.forName("com.cloudbees.jenkins.GitHubPushTrigger")
+                        def githubPushTrigger = githubPushTriggerClass.newInstance()
+                        triggers.add(githubPushTrigger)
+                        println("GitHub push trigger enabled for ${jobName}")
+                    } catch (Exception fallbackEx) {
+                        // Fallback to SCM polling if no GitHub triggers available
+                        println("No GitHub webhook plugin found, falling back to SCM polling")
+                        triggers.add(new SCMTrigger("H/5 * * * *"))
+                    }
                 }
             } else {
-                // Use only SCM polling when webhooks are disabled
-                println("Webhook trigger disabled for ${jobName}, using SCM polling only")
+                // Default to SCM polling when webhooks are disabled
+                println("Webhook trigger disabled for ${jobName}, using SCM polling")
                 triggers.add(new SCMTrigger("H/15 * * * *"))
             }
             
+            // Apply triggers
             triggerProperty.setTriggers(triggers)
             pipelineJob.addProperty(triggerProperty)
             
-            // Set appropriate description
-            if (enableWebhook) {
-                pipelineJob.setDescription("Pipeline job for ${repoName} (${gitBranch}) - GitHub webhook enabled")
-            } else {
-                pipelineJob.setDescription("Pipeline job for ${repoName} (${gitBranch}) - SCM polling only")
-            }
+            // Set description
+            pipelineJob.setDescription(
+                "Pipeline job for ${repoName} (${normalizedBranch}) - " + 
+                (enableWebhook ? "GitHub webhook enabled" : "SCM polling only")
+            )
             
-            // Save configuration
+            // Save and build
             pipelineJob.save()
+             // Trigger initial build with correct method
+            pipelineJob.scheduleBuild2(0, null, new Action[0])
             
-            // Trigger an initial build to validate configuration
-            pipelineJob.scheduleBuild2(0, new Cause.UserIdCause())
-            
-            println("Pipeline job ${jobName} created successfully for branch ${gitBranch}!")
+            println("Pipeline job ${jobName} created successfully for branch ${normalizedBranch}!")
             return 0
         } catch (Exception e) {
             println("Error creating pipeline job: ${e.message}")
@@ -127,7 +152,7 @@ class PipelineJobCreator {
     }
     
     def processPipelines(Map config) {
-        println("Configuration:")
+        println("Pipeline Configuration:")
         println("- Repository URL: ${config.repoUrl}")
         println("- Branches: ${config.branches}")
         println("- Jenkinsfile path: ${config.jenkinsfilePath}")
@@ -136,29 +161,40 @@ class PipelineJobCreator {
         
         // Validate credentials
         if (!validateCredentials(config.credentialsId)) {
-            println("Proceeding with pipeline creation, but webhook functionality may not work!")
+            println("CAUTION: Credentials validation failed. Proceeding, but webhook may not work.")
         }
         
-        // Create a pipeline job for each branch
+        // Create pipeline jobs
         def failureCount = 0
         config.branches.each { branch ->
             def branchSuffix = branch.replace('**/', '').replace('*', '')
-            def result = createPipelineJob(config.repoUrl, branch, config.jenkinsfilePath, 
-                                          config.credentialsId, config.enableWebhook, branchSuffix)
+            def result = createPipelineJob(
+                config.repoUrl, 
+                branch, 
+                config.jenkinsfilePath, 
+                config.credentialsId, 
+                config.enableWebhook, 
+                branchSuffix
+            )
             if (result != 0) {
                 failureCount++
             }
         }
         
+        // Summary and webhook guidance
         if (failureCount > 0) {
             println("WARNING: ${failureCount} pipeline job(s) failed to create properly.")
             return 1
         } else {
             println("All pipeline jobs created successfully!")
             if (config.enableWebhook) {
-                println("GitHub webhooks are enabled - make sure your GitHub repository has webhook configured to ${Jenkins.getInstance().rootUrl ?: 'your-jenkins-url'}/github-webhook/")
+                def jenkinsRootUrl = Jenkins.getInstance().rootUrl ?: 'your-jenkins-url'
+                println("GitHub webhook configuration:")
+                println("- Webhook URL: ${jenkinsRootUrl}/github-webhook/")
+                println("- Recommended events: push, pull_request")
+                println("- Ensure GitHub repository webhook is configured")
             } else {
-                println("GitHub webhooks are disabled - jobs will use SCM polling instead")
+                println("Webhooks disabled - jobs will use SCM polling")
             }
             return 0
         }

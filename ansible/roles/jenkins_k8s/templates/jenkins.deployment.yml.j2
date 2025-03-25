@@ -51,52 +51,6 @@ spec:
               done
 
               echo "Plugin installation completed successfully."
-        - name: setup-init-scripts
-          image: busybox
-          command: ["/bin/sh", "-c"]
-          volumeMounts:
-            - name: jenkins-home
-              mountPath: /var/jenkins_home
-            - name: init-scripts
-              mountPath: /init-scripts-source
-            - name: ssh-key-volume
-              mountPath: /ssh-keys
-          args:
-            - |
-              echo "Preparing init scripts with proper SSH keys..."
-              mkdir -p /var/jenkins_home/init.groovy.d
-              mkdir -p /usr/share/jenkins/ref/init.groovy.d/
-              
-              # Copy all init scripts to target location
-              cp /init-scripts-source/* /var/jenkins_home/init.groovy.d/
-              cp /init-scripts-source/* /usr/share/jenkins/ref/init.groovy.d/
-              
-              # Get SSH keys from mounted secrets
-              JENKINS_SSH_PUBLIC_KEY=$(cat /ssh-keys/jenkins-ssh-public-key.pub)
-              
-              # Now handle the multiline SSH keys properly
-              # We need to:
-              # 1. Replace the actual quote characters with escaped quotes in the key
-              # 2. Handle the multiline format with proper Groovy triple quotes
-                
-              # For Jenkins public key (likely has ----- BEGIN/END headers)
-              JENKINS_SSH_PUBLIC_KEY_ESCAPED=$(echo "$JENKINS_SSH_PUBLIC_KEY" | sed 's/"/\\"/g')
-              
-              # Use awk to properly handle multiline replacements
-              awk -v jenkins_key="$JENKINS_SSH_PUBLIC_KEY_ESCAPED" '
-              {
-                if ($0 ~ /def publicKey = "jenkins_ssh_public_key"/) {
-                  print "def publicKey = \"\"\"" jenkins_key "\"\"\""
-                } else {
-                  print $0
-                }
-              }' /var/jenkins_home/init.groovy.d/03-ssh-cli-auth.groovy > /tmp/02-ssh-cli-auth.groovy
-              mv /tmp/03-ssh-cli-auth.groovy /var/jenkins_home/init.groovy.d/02-ssh-cli-auth.groovy
-              
-              # Do the same for the reference directory
-              cp /var/jenkins_home/init.groovy.d/03-ssh-cli-auth.groovy /usr/share/jenkins/ref/init.groovy.d/02-ssh-cli-auth.groovy
-              
-              echo "Init scripts prepared successfully."
 
       containers:
         - name: jenkins
@@ -119,9 +73,10 @@ spec:
             - name: jenkins-function-scripts
               mountPath: /var/jenkins_home/function_scripts/
             - name: ssh-key-volume
-              mountPath: {{ jenkins_ssh_dir }}
+              mountPath: {{ jenkins_ssh_dir }}/keys/
             - name: ssh-config-volume
               mountPath: {{ jenkins_ssh_dir }}/
+              readOnly: false
           env:
             - name: JAVA_OPTS
               value: "-Djenkins.install.runSetupWizard=false"

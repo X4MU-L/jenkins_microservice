@@ -100,9 +100,7 @@ data:
         // Configuration parameters
         def adminUsername = "{{ jenkins_admin_username }}"
         // "jenkins_ssh_public_key_path" is a Jinja variable passed from Ansible
-        def publicKey =   new File({{ jenkins_ssh_public_key_path | default('/var/jenkins_home/.ssh/jenkins-ssh-public-key.pub') }}).text 
-        
-        println("KEY: ${publicKey}")
+        def publicKey =   new File("{{ jenkins_ssh_public_key_path | default('/var/jenkins_home/.ssh/keys/jenkins-ssh-public-key.pub') }}").text 
 
         // Verify security realm is set up
         def securityRealm = jenkins.getSecurityRealm()
@@ -171,47 +169,11 @@ data:
         e.printStackTrace()
     }
 
-
-    #!/usr/bin/env groovy
-
-    // Import the PipelineJobCreator class
-    def pipelineCreatorScript = new File("/var/jenkins_home/function_scripts/PipelineJobCreator.groovy")
-    def pipelineCreatorClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(pipelineCreatorScript)
-    def pipelineCreator = pipelineCreatorClass.newInstance()
-
-    // Import the environment utils class
-    def envUtilsScript = new File("${JENKINS_HOME}/function-scripts/create-environment-vars.groovy")
-    def envUtilsClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(envUtilsScript)
-    def envUtils = envUtilsClass.newInstance()
-
-    // Template values from Jinja
-    def config = [
-        repoUrl: "{{ repo_url }}",
-        branches: {{ branches | default("['**/main']") }},
-        jenkinsfilePath: "{{ jenkinsfile_path | default('Jenkinsfile') }}",
-        credentialsId: "{{ git_credentials_id | default('github-credentials') }}",
-        enableWebhook: {{ enable_webhook | default('true') }}
-    ]
-
-    // Run the pipeline creation function
-    def result = pipelineCreator.processPipelines(config)
-
-    // Set environment variables if needed
-    {% if docker_username is defined %}
-    def envVars = [
-        "DOCKERHUB_USERNAME": "{{ docker_username }}",
-        "GITHUB_USERNAME": config.repoUrl.tokenize(':')[1].tokenize('/')[0],
-        "GITHUB_REPO_NAME": config.repoUrl.tokenize('/')[-1].replace('.git', '')
-    ]
-    envUtils.setGlobalEnvironmentVariables(envVars)
-    {% endif %}
-
-    return result
   03-create-github-credentials.groovy: |
     #!/usr/bin/env groovy
 
     // Import the GitHubCredentialsCreator class
-    def credentialsCreatorScript = new File("/var/jenkins_home/function_scripts/GitHubCredentialsCreator.groovy")
+    def credentialsCreatorScript = new File("/var/jenkins_home/function_scripts/create-ssh-credentials.groovy")
     def credentialsCreatorClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(credentialsCreatorScript)
     def credentialsCreator = credentialsCreatorClass.newInstance()
 
@@ -220,7 +182,7 @@ data:
         credentialsId: "{{ git_credentials_id | default('github-credentials') }}",
         description: "{{ git_description | default('GitHub SSH Credentials') }}",
         username: "{{ git_user | default('git') }}",
-        sshKeyPath: "{{ github_ssh_key_path | default('/var/jenkins_home/.ssh/github-ssh-key') }}"
+        sshKeyPath: "{{ github_ssh_key_path | default('/var/jenkins_home/.ssh/keys/github-ssh-key') }}"
     ]
 
     // Run the credentials creation function
@@ -231,7 +193,7 @@ data:
     #!/usr/bin/env groovy
 
     // Import the GitHubCredentialsCreator class
-    def credentialsCreatorScript = new File("/var/jenkins_home/function_scripts/GitHubCredentialsCreator.groovy")
+    def credentialsCreatorScript = new File("/var/jenkins_home/function_scripts/create-ssh-credentials.groovy")
     def credentialsCreatorClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(credentialsCreatorScript)
     def credentialsCreator = credentialsCreatorClass.newInstance()
 
@@ -240,13 +202,14 @@ data:
         credentialsId: "{{ aws_credentials_id | default('aws-credentials') }}",
         description: "{{ aws_description | default('Aws SSH Credentials') }}",
         username: "{{ ansible_user | default('ubuntu') }}",
-        sshKeyPath: "{{ aws_ssh_key_path | default('/var/jenkins_home/.ssh/aws-server-key.pem') }}"
+        sshKeyPath: "{{ aws_ssh_key_path | default('/var/jenkins_home/.ssh/keys/aws-server-key.pem') }}"
     ]
 
     // Run the credentials creation function
     def result = credentialsCreator.processCredentials(config)
 
     return result
+
   05-create-dockerhub-credentials.groovy: |
     #!/usr/bin/env groovy
 
@@ -267,16 +230,22 @@ data:
     def result = credentialsCreator.processCredentials(config)
 
     return result
+
   06-create-pipeline-job.groovy: |
     #!/usr/bin/env groovy
 
     // Import the PipelineJobCreator class
-    def pipelineCreatorScript = new File("${JENKINS_HOME}/function_scripts/create-pipeline-job.groovy")
+    def pipelineCreatorScript = new File("/var/jenkins_home/function_scripts/create-pipeline-job.groovy")
     def pipelineCreatorClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(pipelineCreatorScript)
     def pipelineCreator = pipelineCreatorClass.newInstance()
 
+    // import strict host checking setter
+    def strictHostCheckScript = new File("/var/jenkins_home/function_scripts/strict-host-checking.groovy")
+    def strictHostCheckClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(strictHostCheckScript)
+    def strictHostCheckCreator = strictHostCheckClass.newInstance()
+    
     // Import the environment utils class
-    def envUtilsScript = new File("${JENKINS_HOME}/function_scripts/create-environment-vars.groovy")
+    def envUtilsScript = new File("/var/jenkins_home/function_scripts/create-environment-vars.groovy")
     def envUtilsClass = new GroovyClassLoader(getClass().getClassLoader()).parseClass(envUtilsScript)
     def envUtils = envUtilsClass.newInstance()
 
@@ -289,13 +258,19 @@ data:
         enableWebhook: {{ enable_webhook | default('true') }}
     ]
 
+    def strictHostConfig = [
+        hostKey: "{{ github_host_key }}",
+    ]
+    // create hostkey strategy
+    strictHostCheckCreator.processHostKeyVerification(strictHostConfig)
+    
     // Run the pipeline creation function
     def result = pipelineCreator.processPipelines(config)
 
     // Set environment variables if needed
-    {% if docker_username is defined %}
+    {% if dockerhub_username is defined %}
     def envVars = [
-        "DOCKERHUB_USERNAME": "{{ docker_username }}",
+        "DOCKERHUB_USERNAME": "{{ dockerhub_username }}",
         "GITHUB_USERNAME": config.repoUrl.tokenize(':')[1].tokenize('/')[0],
         "GITHUB_REPO_NAME": config.repoUrl.tokenize('/')[-1].replace('.git', '')
     ]

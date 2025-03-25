@@ -5,7 +5,6 @@ metadata:
   namespace: {{ jenkins_namespace }}
 data:
   plugins.txt: |
-    kubernetes:latest
     workflow-aggregator:latest
     git:latest
     job-dsl:latest
@@ -15,3 +14,5 @@ data:
     role-strategy:latest
     sshd:latest
     matrix-auth:latest
+    github-branch-source:latest
+    github:latest
