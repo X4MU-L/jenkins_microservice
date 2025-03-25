@@ -7,16 +7,10 @@
     - name: Print Jenkins URL
       ansible.builtin.debug:
         msg: "jenkins url: {{ jenkins_url }}"
+      tags:
+        - jenkins
+        - kubernetes
 
-    # - name: Set Jenkins URL fact for production environment
-    #   ansible.builtin.set_fact:
-    #     jenkins_url: "https://{{ ansible_host }}:{{ node_port }}"
-    #   when: environment == "production"
-
-    # - name: Set Jenkins URL fact for non-production environments
-    #   ansible.builtin.set_fact:
-    #     jenkins_url: "http://{{ ansible_host }}:{{ node_port }}"
-    #   when: environment != "production"
   roles:
     - role: k8s
       tags: [jenkins, kubernetes, setup]
